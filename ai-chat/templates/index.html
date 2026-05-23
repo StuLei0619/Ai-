@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 多角色对话</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
+</head>
+<body>
+    <!-- 左侧栏 - 角色列表 -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>🤖 角色列表</h2>
+            <div class="sidebar-header-actions">
+                <button class="btn btn-sm btn-outline" id="btnRefreshChars" title="刷新角色列表">🔄</button>
+                <button class="btn btn-sm btn-primary" id="btnNewChar" title="新建角色">＋</button>
+            </div>
+        </div>
+        <div class="character-list" id="characterList"></div>
+    </aside>
+
+    <!-- 中间 - 对话区 -->
+    <main class="chat-area" id="chatArea">
+        <div class="chat-header" id="chatHeader">
+            <div class="chat-header-info">
+                <span class="chat-avatar" id="chatAvatar">💬</span>
+                <span class="chat-name" id="chatName">选择角色开始对话</span>
+            </div>
+            <div class="chat-header-actions">
+                <button class="btn btn-sm btn-outline" id="btnProactive" title="后台活跃">💤 关</button>
+                <button class="btn btn-sm btn-outline" id="btnWebSearch" title="切换联网搜索" onclick="toggleWebSearch()">🌐</button>
+                <button class="btn btn-sm btn-outline" id="btnClearChat" title="清空对话">🗑</button>
+            </div>
+        </div>
+        <div class="proactive-bar" id="proactiveBar" style="display:none;">
+            <span>💤 后台活跃中</span>
+            <span>概率增幅:</span>
+            <input type="range" id="proactiveSlider" min="1" max="20" value="5" oninput="updateProactiveIncrement(this.value)">
+            <span><b id="proactiveIncrementVal">5</b>%/分钟</span>
+            <span>| 触发概率: <b id="proactiveCurProb">0</b>%</span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-icon">💬</div>
+                <h2>欢迎使用 AI 多角色对话</h2>
+                <p>左侧选择或创建一个角色，开始你的专属对话体验</p>
+                <div class="welcome-tips">
+                    <div class="tip-card">
+                        <span class="tip-icon">✨</span>
+                        <span>自定义角色性格，创造独一无二的对话伙伴</span>
+                    </div>
+                    <div class="tip-card">
+                        <span class="tip-icon">🔍</span>
+                        <span>搜索热门网络人物，AI 帮你一键生成角色</span>
+                    </div>
+                    <div class="tip-card">
+                        <span class="tip-icon">🔄</span>
+                        <span>多角色自由切换，体验不同性格的对话乐趣</span>
+                    </div>
+                    <div class="tip-card" style="border: 1px dashed var(--accent);">
+                        <span class="tip-icon">💡</span>
+                        <span>角色列表为空？点击侧边栏 <b>🔄 刷新</b> 按钮更新数据</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="chat-input-area" id="chatInputArea" style="display:none;">
+            <div class="chat-input-row">
+                <textarea id="msgInput" placeholder="输入消息，Enter 发送...  输入 /help 查看命令" rows="1"></textarea>
+                <button class="btn btn-primary" id="btnSend">发送</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 右侧面板 - 编辑/设置 -->
+    <aside class="panel" id="rightPanel">
+        <div class="panel-tabs">
+            <button class="panel-tab active" data-tab="edit" onclick="switchTab('edit')">✏️ 角色编辑</button>
+            <button class="panel-tab" data-tab="settings" onclick="switchTab('settings')">⚙️ 设置</button>
+        </div>
+
+        <!-- 编辑面板 -->
+        <div class="panel-content active" id="panelEdit">
+            <!-- 角色选中后的头像展示 -->
+            <div class="char-profile" id="charProfile" style="display:none;">
+                <div class="char-profile-avatar" id="charProfileAvatar">🤖</div>
+                <h3 class="char-profile-name" id="charProfileName"></h3>
+                <p class="char-profile-desc" id="charProfileDesc"></p>
+                <button class="btn btn-sm btn-outline" id="btnEditChar" style="width:100%;margin-top:8px;">✏️ 编辑此角色</button>
+            </div>
+            <div id="editFormSections">
+                <label>AI 搜索创建角色</label>
+                <div class="search-row">
+                    <input type="text" id="searchName" placeholder="输入网络热门人物名称...">
+                    <button class="btn btn-primary btn-sm" id="btnSearch">🔍 搜索</button>
+                </div>
+                <div class="search-result" id="searchResult" style="display:none;"></div>
+            </div>
+            <hr>
+            <div class="panel-section" id="manualCreateSection">
+                <label>手动创建 / 编辑角色</label>
+                <div class="form-group">
+                    <label class="form-label">角色头像</label>
+                    <div class="avatar-picker">
+                        <div class="avatar-preview-row">
+                            <div class="avatar-preview" id="charAvatarPreview">🤖</div>
+                            <input type="text" id="editAvatar" value="🤖" maxlength="2" class="avatar-input" placeholder="Emoji">
+                            <span style="color:var(--text-muted);font-size:12px;">或</span>
+                            <label class="btn btn-sm btn-outline avatar-upload-btn">
+                                📷 导入图片
+                                <input type="file" id="charAvatarFile" accept="image/*" style="display:none;" onchange="uploadCharAvatar()">
+                            </label>
+                        </div>
+                        <div class="emoji-suggestions" id="emojiSuggestions"></div>
+                    </div>
+                    <input type="hidden" id="editAvatarUrl" value="">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">角色名称</label>
+                    <input type="text" id="editName" placeholder="给角色起个名字...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">性格描述 <span class="form-hint">（将用作 AI 的 system prompt）</span></label>
+                    <textarea id="editPersonality" rows="6" placeholder="描述角色的性格、说话风格、行为模式...&#10;&#10;例如：你是一个温柔体贴的心灵治愈师，善于倾听..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" id="btnSaveChar">💾 保存角色</button>
+                    <button class="btn btn-danger btn-sm" id="btnDeleteChar" style="display:none;">删除</button>
+                </div>
+            </div>
+            </div><!-- /editFormSections -->
+        </div>
+
+        <!-- 设置面板 -->
+        <div class="panel-content" id="panelSettings">
+            <div class="panel-section">
+                <div class="form-group">
+                    <label class="form-label">用户头像</label>
+                    <div class="avatar-preview-row">
+                        <div class="avatar-preview" id="userAvatarPreview">👤</div>
+                        <label class="btn btn-sm btn-outline avatar-upload-btn">
+                            📷 导入图片
+                            <input type="file" id="userAvatarFile" accept="image/*" style="display:none;" onchange="uploadUserAvatar()">
+                        </label>
+                        <button class="btn btn-sm btn-outline" onclick="resetUserAvatar()" title="恢复默认">↩</button>
+                    </div>
+                </div>
+                <hr>
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" id="settingApiKey" placeholder="sk-...">
+                    <span class="form-hint">仅需填写 DeepSeek API Key 即可使用</span>
+                </div>
+                <div class="config-info">
+                    <div class="config-info-item">
+                        <span class="config-info-label">接口地址</span>
+                        <span class="config-info-value">https://api.deepseek.com</span>
+                    </div>
+                    <div class="config-info-item">
+                        <span class="config-info-label">模型</span>
+                        <span class="config-info-value">deepseek-chat</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary" id="btnSaveSettings" onclick="saveSettings()">💾 保存设置</button>
+            </div>
+        </div>
+    </aside>
+
+    <script>
+        // 服务端预渲染的初始数据，避免首屏空白
+        window.__INITIAL_CHARACTERS__ = {{ characters_json | safe }};
+    </script>
+    <script src="/static/js/app.js?v=10"></script>
+</body>
+</html>
