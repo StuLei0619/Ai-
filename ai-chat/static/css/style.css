@@ -283,6 +283,54 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 }
 .proactive-bar b { color: var(--accent); }
 
+/* ========== 海龟汤游戏 ========== */
+.game-banner {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 24px;
+    background: linear-gradient(135deg, #1a0a2e, #2d1b4e);
+    border-bottom: 1px solid var(--accent-secondary);
+    font-size: 13px; color: #c4b5fd;
+    animation: fadeIn 0.3s ease;
+}
+.game-banner .game-banner-icon { font-size: 18px; }
+.game-banner .game-banner-text { flex: 1; }
+.game-banner .game-banner-hint { font-size: 11px; color: var(--text-muted); }
+
+.btn-game {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+.btn-game:hover {
+    border-color: #a78bfa;
+    color: #c4b5fd;
+    background: rgba(167,139,250,0.1);
+}
+.btn-game.active {
+    border-color: #a78bfa;
+    color: #c4b5fd;
+    background: rgba(167,139,250,0.15);
+}
+.btn-game-end {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+.btn-game-end:hover {
+    background: var(--danger);
+    color: #fff;
+}
+
+/* 游戏消息 - 特殊样式 */
+.message.game-assistant .message-content {
+    background: linear-gradient(135deg, #1f1a3a, #251e45);
+    border: 1px solid #4a3f7a;
+    box-shadow: 0 0 12px rgba(139, 120, 220, 0.15);
+    color: #d5cef0;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(1.2); }

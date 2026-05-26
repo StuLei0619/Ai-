@@ -33,6 +33,27 @@ def save_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+# ========== 海龟汤游戏 ==========
+GAME_RULES = """你正在主持一个海龟汤猜谜游戏。请按以下规则进行：
+
+1. 首先，你需要想一个经典的、离奇的海龟汤谜题。谜题要有出人意料的真相，但逻辑自洽。
+2. 然后，只告诉玩家"汤面"（故事的离奇现象或谜面），勾起玩家的好奇心。绝对不要把"汤底"（真相/结局）透露给玩家，这是你要守护的秘密。
+3. 玩家通过提问来推理故事完整过程，你只能用以下四种方式回答：
+   - "是" - 玩家的猜测正确
+   - "否" - 玩家的猜测错误
+   - "是也不是" - 部分正确但不完全
+   - "与此无关" - 问题与真相无关
+4. 只有当玩家自己说出完整的故事真相，或者核心逻辑正确时，你才可以回复"恭喜你，真相大白！"并详细解释完整故事（即揭晓汤底）。
+5. 用简短、神秘的语气回答，保持悬疑氛围。可以适当加emoji营造气氛。
+6. 如果玩家请求提示，可以给予适当的模糊提示，但不要直接透露真相。
+
+现在请想一个谜题，只告诉我汤面，我们开始游戏。汤底藏在心里，等我猜对再公布。记住，你绝对不能主动透露任何中间过程和汤底。"""
+
+DEFAULT_GAME_HOST_PROMPT = "你是一个海龟汤游戏主持人。\n\n" + GAME_RULES
+
+game_history = []
+
+
 def load_config():
     config = load_json(CONFIG_FILE, {"api_key": ""})
     config["api_base"] = AI_API_BASE
@@ -506,6 +527,70 @@ def api_search_character_detail():
         avatar = "🌟"
 
     return jsonify({"name": name, "personality": result, "avatar": avatar, "source": "ai-search"})
+
+
+@app.route("/api/game/start", methods=["POST"])
+def api_game_start():
+    global game_history
+    config = load_config()
+    if not config.get("api_key"):
+        return jsonify({"error": "请先在设置中配置 API Key"}), 400
+
+    body = request.get_json() or {}
+    cid = body.get("character_id")
+
+    # 构建系统提示词：角色性格 + 游戏规则
+    system_content = DEFAULT_GAME_HOST_PROMPT
+    if cid:
+        data = load_characters()
+        char = next((c for c in data.get("characters", []) if c["id"] == cid), None)
+        if char and char.get("personality"):
+            system_content = char["personality"] + "\n\n---\n\n" + GAME_RULES
+
+    game_history = [{"role": "system", "content": system_content}]
+    game_history.append({"role": "user", "content": "请想一个海龟汤谜题并开始游戏"})
+
+    try:
+        reply = call_ai(game_history, config)
+    except Exception as e:
+        game_history = []
+        return jsonify({"error": "主持人暂时离线，请稍后再来破案🔍"}), 500
+
+    game_history.append({"role": "assistant", "content": reply})
+    return jsonify({"reply": reply})
+
+
+@app.route("/api/game/guess", methods=["POST"])
+def api_game_guess():
+    global game_history
+    if not game_history:
+        return jsonify({"error": "请先开始一局海龟汤游戏"}), 400
+
+    body = request.get_json()
+    user_msg = body.get("message", "").strip()
+    if not user_msg:
+        return jsonify({"error": "请输入你的问题或猜测"}), 400
+
+    config = load_config()
+    if not config.get("api_key"):
+        return jsonify({"error": "请先在设置中配置 API Key"}), 400
+
+    game_history.append({"role": "user", "content": user_msg})
+
+    try:
+        reply = call_ai(game_history, config)
+    except Exception as e:
+        return jsonify({"error": "主持人暂时离线，请稍后再来破案🔍"}), 500
+
+    game_history.append({"role": "assistant", "content": reply})
+    return jsonify({"reply": reply})
+
+
+@app.route("/api/game/end", methods=["POST"])
+def api_game_end():
+    global game_history
+    game_history = []
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

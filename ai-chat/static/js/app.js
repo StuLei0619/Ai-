@@ -5,6 +5,9 @@ const state = {
     editingCharId: null,
     searchResult: null,
     webSearchEnabled: false,
+    gameActive: false,
+    _prevChatName: null,
+    _prevChatAvatar: null,
 };
 
 // ========== 后台活跃（每角色独立定时器） ==========
@@ -556,6 +559,10 @@ async function clearChatSilent() {
 }
 
 async function sendMessage() {
+    if (state.gameActive) {
+        return sendGameMessage();
+    }
+
     const msg = dom.msgInput.value.trim();
     if (!msg || !state.currentCharId) return;
     dom.msgInput.value = "";
@@ -901,6 +908,11 @@ document.addEventListener("click", (e) => {
     if (cancelBtn) cancelSearchResult();
 });
 
+var btnGameStart = document.getElementById("btnGameStart");
+if (btnGameStart) btnGameStart.addEventListener("click", startGame);
+var btnGameEnd = document.getElementById("btnGameEnd");
+if (btnGameEnd) btnGameEnd.addEventListener("click", endGame);
+
 function toggleWebSearch() {
     state.webSearchEnabled = !state.webSearchEnabled;
     const btn = $("#btnWebSearch");
@@ -914,6 +926,114 @@ function toggleWebSearch() {
         btn.style.borderColor = "";
         btn.style.color = "";
         btn.title = "切换联网搜索";
+    }
+}
+
+// ========== 海龟汤游戏 ==========
+function syncGameUI() {
+    var startBtn = document.getElementById("btnGameStart");
+    var endBtn = document.getElementById("btnGameEnd");
+    var banner = document.getElementById("gameBanner");
+    var input = document.getElementById("chatInputArea");
+    var msgInput = document.getElementById("msgInput");
+    var welcome = document.getElementById("welcomeScreen");
+
+    if (state.gameActive) {
+        if (startBtn) { startBtn.classList.add("active"); startBtn.textContent = "🎭 游戏中"; }
+        if (endBtn) endBtn.style.display = "";
+        if (banner) banner.style.display = "flex";
+        if (input) input.style.display = "block";
+        if (welcome) welcome.style.display = "none";
+        if (msgInput) msgInput.placeholder = "输入你的问题或猜测...";
+
+        if (!state.currentCharId) {
+            if (!state._prevChatName) {
+                state._prevChatName = dom.chatName.textContent;
+                state._prevChatAvatar = dom.chatAvatar.innerHTML;
+            }
+            dom.chatName.textContent = "海龟汤游戏";
+            dom.chatAvatar.innerHTML = "🎭";
+        }
+    } else {
+        if (startBtn) { startBtn.classList.remove("active"); startBtn.textContent = "🎭 海龟汤"; }
+        if (endBtn) endBtn.style.display = "none";
+        if (banner) banner.style.display = "none";
+        if (msgInput) msgInput.placeholder = "输入消息，Enter 发送...  输入 /help 查看命令";
+
+        if (!state.currentCharId) {
+            if (state._prevChatName) {
+                dom.chatName.textContent = state._prevChatName;
+                dom.chatAvatar.innerHTML = state._prevChatAvatar;
+                state._prevChatName = null;
+                state._prevChatAvatar = null;
+            }
+            if (input) input.style.display = "none";
+            if (welcome) welcome.style.display = "";
+        }
+    }
+}
+
+function appendGameMessage(role, content) {
+    var div = document.createElement("div");
+    div.className = "message game-" + role;
+    var avatarHtml;
+    if (role === "user") {
+        avatarHtml = getUserAvatar();
+    } else {
+        var char = state.characters.find(function(c) { return c.id === state.currentCharId; });
+        avatarHtml = char ? renderAvatar(char.avatar, char.avatar_url, 28) : "🎭";
+    }
+    div.innerHTML =
+        '<span class="message-avatar">' + avatarHtml + '</span>' +
+        '<div>' +
+            '<div class="message-content">' + escHtml(content) + '</div>' +
+        '</div>';
+    dom.chatMessages.appendChild(div);
+    dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+}
+
+async function startGame() {
+    addTypingIndicator();
+
+    try {
+        var body = {};
+        if (state.currentCharId) body.character_id = state.currentCharId;
+        var data = await api("POST", "/api/game/start", body);
+        removeTypingIndicator();
+        appendGameMessage("assistant", data.reply);
+        state.gameActive = true;
+        syncGameUI();
+    } catch (e) {
+        removeTypingIndicator();
+        appendSystemMessage("🎭 主持人暂时离线，请稍后再来破案🔍");
+    }
+}
+
+async function endGame() {
+    try {
+        await api("POST", "/api/game/end");
+    } catch (e) { /* ignore */ }
+    state.gameActive = false;
+    syncGameUI();
+    appendSystemMessage("🎭 海龟汤游戏已结束，欢迎再来破案！");
+}
+
+async function sendGameMessage() {
+    var msg = dom.msgInput.value.trim();
+    if (!msg) return;
+    dom.msgInput.value = "";
+    dom.msgInput.style.height = "auto";
+
+    appendGameMessage("user", msg);
+    addTypingIndicator();
+
+    try {
+        var data = await api("POST", "/api/game/guess", { message: msg });
+        removeTypingIndicator();
+        appendGameMessage("assistant", data.reply);
+    } catch (e) {
+        removeTypingIndicator();
+        appendSystemMessage("🎭 主持人暂时离线，请稍后再来破案🔍");
     }
 }
 
